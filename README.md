@@ -107,7 +107,7 @@ The analysis is guided by six progressive research questions:
 
 ### Rating System Note
 
-> **Two overlapping rating systems exist in this dataset:**
+ **Two overlapping rating systems exist in this dataset:**
 > - **Pre-2009 loans (~25%):** Use `CreditGrade` (AA, A, B, C, D, E, HR, NC)
 > - **Post-2009 loans (~75%):** Use `ProsperRating (Alpha)` (AA, A, B, C, D, E, HR)
 >
@@ -140,212 +140,303 @@ prosper-loan-analysis/
 ├──  README.md                          # This file
 ├──  Prosper_Loan_Analysis_Report.docx  # Full written report
 │
-├── data/
+├──  data/
 │   └── loan_subset_data.csv              # 10,000-row working sample
 │       # Full dataset (113,937 rows):
 │       # https://s3.amazonaws.com/udacity-hosted-downloads/ud651/prosperLoanData.csv
 │
-└── outputs/
+└──  outputs/
     ├── Part_I_exploration.html           # HTML export of exploratory notebook
     └── Part_II_slide_deck.slides.html    # Reveal.js slide deck export
 ```
 
 ---
 
-## Architecture
+##  Architecture
 
 ### Data Science Flow — System Architecture Diagram
 
 ```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#1F4E79",
-    "primaryTextColor": "#FFFFFF",
-    "primaryBorderColor": "#2E75B6",
-    "lineColor": "#5A9BD5",
-    "background": "#FAFAFA",
-    "fontSize": "14px"
-  }
-}}%%
-
 flowchart TD
+    %% ─────────────────────────────────────────────────────────────────
+    %% NODE DEFINITIONS
+    %% ─────────────────────────────────────────────────────────────────
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 1 — DATA SOURCE               ║
-    %% ╚══════════════════════════════════════╝
-    L1["🌐  DATA SOURCE
-    ─────────────────────────────────
-    Prosper Marketplace  •  S3 CSV  •  82.5 MB
-    113,937 loans  ×  81 variables  •  2005–2014"]
+    %% Layer 1 — Data Source
+    SRC1(["🌐 Prosper Marketplace
+S3 Hosted CSV"])
+    SRC2(["📋 113,937 Loans · 81 Variables
+2005 – 2014"])
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 2 — DATA INGESTION            ║
-    %% ╚══════════════════════════════════════╝
-    L2["  DATA INGESTION
-    ─────────────────────────────────
-    load_prosper()  •  pd.read_csv()
-    Ordered Categoricals: ProsperRating AA→HR  •  IncomeRange  •  Term
-    Date parsing: LoanOriginationDate  •  FirstRecordedCreditLine"]
+    %% Layer 2 — Ingestion
+    ING1["📥 load_prosper()
+pd.read_csv()"]
+    ING2["🔤 Ordered Categoricals
+ProsperRating AA→HR · IncomeRange · Term"]
+    ING3["📅 Date Parsing
+LoanOriginationDate · FirstRecordedCreditLine"]
+    RAW[("💾 prosperLoanData.csv
+113,937 rows × 81 cols")]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 3 — DATA QUALITY              ║
-    %% ╚══════════════════════════════════════╝
-    L3["  DATA QUALITY & CLEANING
-    ─────────────────────────────────
-    quality_report()  →  null audit  •  dtype summary
-    25% missing ProsperRating pre-2009  •  DTI outliers clipped ≤ 1.0
-    Separate pre/post-2009 cohorts  •  corr(min_periods=500)"]
+    %% Layer 3 — Data Quality Assessment
+    VASS["👁️ Visual Assessment
+df.head() · df.sample()
+df.info() · df.dtypes"]
+    PASS["🔢 Programmatic Assessment
+df.describe() · isnull().sum()
+value_counts() · duplicated()"]
+    QI1["⚠️ Quality Issue 1
+25% missing ProsperRating
+pre-2009 CreditGrade only"]
+    QI2["⚠️ Quality Issue 2
+DTI outliers > 1.0
+(debt exceeds income)"]
+    QI3["⚠️ Quality Issue 3
+Age-censored 2013–14 loans
+near-zero apparent defaults"]
+    TI1["⚠️ Tidiness Issue
+Two rating systems
+CreditGrade vs ProsperRating"]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 4 — FEATURE ENGINEERING       ║
-    %% ╚══════════════════════════════════════╝
-    L4["  FEATURE ENGINEERING  —  11 derived variables
-    ─────────────────────────────────
-    BadLoan  •  CreditScoreMid  •  ★ LoanToIncomeRatio  •  OriginationYear
-    CreditHistoryYears  •  AnyDelinquency  •  NetLoss  •  APR_Rate_Spread
-    UtilisationTier  •  LoanCategory  •  AnnualIncome"]
+    %% Layer 4 — Cleaning
+    CL1["✅ Cohort Separation
+Pre-2009 CreditGrade
+Post-2009 ProsperRating"]
+    CL2["✅ Outlier Clipping
+DTI capped ≤ 1.0
+BankcardUtil capped ≤ 1.5"]
+    CL3["✅ Correlation Fix
+corr(min_periods=500)
+pre-2009 rows contribute"]
+    CL4["✅ Censoring Flag
+Document 2013–14 artefact
+not improved quality"]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 5 — STATISTICAL ANALYSIS      ║
-    %% ╚══════════════════════════════════════╝
-    L5["  STATISTICAL ANALYSIS
-    ─────────────────────────────────
-    Pearson r: CreditScore −0.47  •  BankcardUtil +0.24  •  DTI +0.18
-    Spearman r: ProsperScore vs EstimatedLoss −0.70
-    t-tests  •  OLS regression lines  •  95% confidence intervals"]
+    %% Layer 5 — Feature Engineering
+    FE1["⚙️ BadLoan
+1 = Chargedoff OR Defaulted
+binary outcome variable"]
+    FE2["⚙️ CreditScoreMid
+(Lower + Upper) / 2
+continuous FICO proxy"]
+    FE3["⚙️ ★ LoanToIncomeRatio
+MonthlyPayment ÷ MonthlyIncome
+affordability stress signal"]
+    FE4["⚙️ OriginationYear
+CreditHistoryYears
+AnyDelinquency · LoanCategory"]
+    MERGE["🔗 Analysis-Ready Dataset
+113,937 rows · 92 columns
+81 original + 11 engineered"]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 6 — EXPLORATORY ANALYSIS      ║
-    %% ╚══════════════════════════════════════╝
-    L6A["  UNIVARIATE  —  11 charts
-    ────────────────────
-    Histogram  •  Countplot
-    Bar  •  Dual-axis
-    All key variable
-    distributions"]
+    %% Layer 6 — Statistical Analysis
+    ST1["📐 Pearson Correlations
+CreditScore  r = −0.47
+BankcardUtil r = +0.24
+DTI          r = +0.18"]
+    ST2["📐 Spearman Correlation
+ProsperScore vs EstimatedLoss
+r = −0.70  (p < 0.001)"]
+    ST3["📐 Significance Tests
+t-tests · OLS regression
+95% confidence intervals"]
 
-    L6B["  BIVARIATE  —  8 charts
-    ────────────────────
-    Scatter  •  Boxplot
-    Violin  •  Heatmap
-    Rate & BadLoan
-    vs each predictor"]
+    %% Layer 7 — Exploratory Analysis
+    UV["📊 Univariate — 11 charts
+Histogram · Countplot
+Bar · Dual-axis time series
+All key variable distributions"]
+    BV["📊 Bivariate — 8 charts
+Scatter · Boxplot · Violin
+Heatmap · Dual bar chart
+Rate & BadLoan vs each predictor"]
+    MV["📊 Multivariate — 10 charts
+Facet · PairGrid · Bubble scatter
+Interaction heatmaps
+Multi-encoding scatter"]
 
-    L6C["  MULTIVARIATE  —  10 charts
-    ────────────────────
-    Facet  •  PairGrid
-    Bubble scatter
-    Interaction heatmaps
-    Multi-encoding scatter"]
+    %% Layer 8 — Key Insights
+    KI1["💡 Rating is Master Signal
+AA 7.9% → HR 31.8%
+HR defaults 30× more than AA"]
+    KI2["💡 LoanToIncomeRatio
+C-tier: 5.5% default (LTI <5%)
+vs 26.3% (LTI >20%) — near 5×"]
+    KI3["💡 Platform Temporal Effects
+Pre-2010 genuine mis-pricing
+2013–14 = censoring artefact"]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 7 — KEY INSIGHTS              ║
-    %% ╚══════════════════════════════════════╝
-    L7["  KEY INSIGHTS
-    ─────────────────────────────────
-    Rating is master signal  •  AA 7.9% → HR 31.8%  •  ~24 pp staircase
-    HR defaults 30× more than AA  (19.4% vs 0.6%)
-    LoanToIncomeRatio doubles default risk within same tier
-    2013–14 near-zero defaults = loan-age censoring artefact"]
+    %% Layer 9 — Explanatory Slides
+    SL1["🎯 Slides 1–8
+Rating staircase · ProsperScore
+Bureau signals · Homeownership
+Delinquency · LTI heatmap
+Term strategies · Emp × Income"]
+    SL2["🎯 Slides 9–16
+Platform timeline · Year × Rating
+Category risk · Correlation matrix
+Occupation risk · Score trajectory
+Factor hierarchy waterfall"]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 8 — EXPLANATORY ANALYSIS      ║
-    %% ╚══════════════════════════════════════╝
-    L8["  EXPLANATORY ANALYSIS  —  16 polished slides
-    ─────────────────────────────────
-    Slides 1–8:  Rating staircase  •  Bureau signals  •  Homeownership
-                 Delinquency  •  LTI heatmap  •  Term strategies  •  Timeline  •  Emp×Income
-    Slides 9–16: Year×Rating heatmap  •  Category risk  •  Correlation matrix
-                 Occupation  •  Score trajectory  •  Synthesis waterfall  •  Factor hierarchy"]
+    %% Layer 10 — Outputs
+    OP1[("📤 Part_I_exploration
+.ipynb  /  .html
+29 visualisations
+Q→V→O narrative")]
+    OP2[("📤 Part_II_slide_deck
+.ipynb  /  .slides.html
+16 polished charts
+Reveal.js · Speaker notes")]
+    OP3[("📄 Report.docx
+10 sections · 16 figures
+Academic references
+WCAG accessible")]
 
-    %% ╔══════════════════════════════════════╗
-    %% ║  LAYER 9 — OUTPUTS                   ║
-    %% ╚══════════════════════════════════════╝
-    L9A["  Part_I_exploration.html
-    ──────────────────────────
-    29 visualisations
-    Full Q→V→O narrative
-    HTML export"]
+    %% ─────────────────────────────────────────────────────────────────
+    %% EDGES
+    %% ─────────────────────────────────────────────────────────────────
 
-    L9B["  Part_II_slide_deck
-    .slides.html
-    ──────────────────────────
-    16 polished charts
-    Reveal.js presentation
-    Speaker notes"]
+    SRC1 --> ING1
+    SRC2 --> ING1
+    ING1 --> ING2
+    ING1 --> ING3
+    ING2 --> RAW
+    ING3 --> RAW
 
-    L9C["  Report.docx
-    ──────────────────────────
-    Comprehensive report
-    11 sections
-    References"]
+    RAW --> VASS
+    RAW --> PASS
 
-    %% ════════════════════════════════════════
-    %% SEQUENTIAL LAYER CONNECTIONS
-    %% ════════════════════════════════════════
-    L1  --> L2
-    L2  --> L3
-    L3  --> L4
-    L4  --> L5
-    L5  --> L6A & L6B & L6C
-    L6A --> L6B
-    L6B --> L6C
-    L6C --> L7
-    L7  --> L8
-    L8  --> L9A & L9B & L9C
+    VASS --> QI1
+    VASS --> QI2
+    VASS --> QI3
+    VASS --> TI1
+    PASS --> QI1
+    PASS --> QI2
+    PASS --> QI3
+    PASS --> TI1
 
-    %% ════════════════════════════════════════
-    %% STYLE CLASSES — each layer its own palette
-    %% ════════════════════════════════════════
-    classDef source    fill:#1F4E79,stroke:#0D2B45,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef ingest    fill:#2E75B6,stroke:#1A5590,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef quality   fill:#C55A11,stroke:#8B3A00,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef engineer  fill:#375623,stroke:#1D3411,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef stats     fill:#7030A0,stroke:#4B1A6E,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef explore   fill:#0070C0,stroke:#004C87,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef insights  fill:#9C6500,stroke:#6B4400,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef explain   fill:#C00000,stroke:#800000,color:#FFFFFF,font-weight:bold,text-align:left
-    classDef output    fill:#375623,stroke:#1D3411,color:#E2F0D9,font-weight:bold,text-align:left
+    QI1 --> CL1
+    QI2 --> CL2
+    QI3 --> CL4
+    TI1 --> CL1
+    QI1 --> CL3
 
-    class L1            source
-    class L2            ingest
-    class L3            quality
-    class L4            engineer
-    class L5            stats
-    class L6A,L6B,L6C   explore
-    class L7            insights
-    class L8            explain
-    class L9A,L9B,L9C   output
+    CL1 --> FE1
+    CL2 --> FE2
+    CL3 --> FE3
+    CL4 --> FE4
+
+    FE1 --> MERGE
+    FE2 --> MERGE
+    FE3 --> MERGE
+    FE4 --> MERGE
+
+    MERGE --> ST1
+    MERGE --> ST2
+    MERGE --> ST3
+
+    ST1 --> UV
+    ST2 --> UV
+    ST3 --> UV
+
+    UV --> BV
+    BV --> MV
+
+    MV --> KI1
+    MV --> KI2
+    MV --> KI3
+
+    KI1 --> SL1
+    KI2 --> SL1
+    KI3 --> SL1
+    SL1 --> SL2
+
+    UV --> OP1
+    BV --> OP1
+    MV --> OP1
+    SL1 --> OP2
+    SL2 --> OP2
+    SL2 --> OP3
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% STYLES — each layer gets its own distinct color palette
+    %% ─────────────────────────────────────────────────────────────────
+
+    %% Layer 1 — Data Source: deep teal
+    classDef sourceStyle fill:#0D5C6E,stroke:#07404E,color:#E0F7FA,font-weight:bold
+
+    %% Layer 2 — Ingestion: sky blue
+    classDef ingestionStyle fill:#1976D2,stroke:#0D47A1,color:#E3F2FD,font-weight:bold
+
+    %% Layer 2 — Raw Storage: steel blue / cylinder
+    classDef rawStyle fill:#455A64,stroke:#263238,color:#ECEFF1,font-weight:bold
+
+    %% Layer 3 — Assessment tools: violet
+    classDef assessStyle fill:#6A1B9A,stroke:#4A148C,color:#F3E5F5,font-weight:bold
+
+    %% Layer 3 — Issues: amber warning
+    classDef issueStyle fill:#E65100,stroke:#BF360C,color:#FFF3E0,font-weight:bold
+
+    %% Layer 4 — Cleaning: green
+    classDef cleanStyle fill:#2E7D32,stroke:#1B5E20,color:#E8F5E9,font-weight:bold
+
+    %% Layer 5 — Feature Engineering: gold
+    classDef featureStyle fill:#F57F17,stroke:#E65100,color:#FFF8E1,font-weight:bold
+
+    %% Layer 5 — Merge / Dataset: brown
+    classDef mergeStyle fill:#795548,stroke:#4E342E,color:#EFEBE9,font-weight:bold
+
+    %% Layer 6 — Statistical Analysis: deep purple
+    classDef statsStyle fill:#4527A0,stroke:#311B92,color:#EDE7F6,font-weight:bold
+
+    %% Layer 7 — Exploratory Analysis: navy blue
+    classDef exploreStyle fill:#1A237E,stroke:#0D1B6E,color:#E8EAF6,font-weight:bold
+
+    %% Layer 8 — Key Insights: dark gold / olive
+    classDef insightStyle fill:#827717,stroke:#558B2F,color:#F9FBE7,font-weight:bold
+
+    %% Layer 9 — Explanatory Slides: crimson
+    classDef slideStyle fill:#880E4F,stroke:#560027,color:#FCE4EC,font-weight:bold
+
+    %% Layer 10 — Outputs: forest green / cylinder
+    classDef outputStyle fill:#1B5E20,stroke:#0A3D0A,color:#C8E6C9,font-weight:bold
+
+    %% ─────────────────────────────────────────────────────────────────
+    %% CLASS ASSIGNMENTS
+    %% ─────────────────────────────────────────────────────────────────
+    class SRC1,SRC2 sourceStyle
+    class ING1,ING2,ING3 ingestionStyle
+    class RAW rawStyle
+    class VASS,PASS assessStyle
+    class QI1,QI2,QI3,TI1 issueStyle
+    class CL1,CL2,CL3,CL4 cleanStyle
+    class FE1,FE2,FE3,FE4 featureStyle
+    class MERGE mergeStyle
+    class ST1,ST2,ST3 statsStyle
+    class UV,BV,MV exploreStyle
+    class KI1,KI2,KI3 insightStyle
+    class SL1,SL2 slideStyle
+    class OP1,OP2,OP3 outputStyle
 ```
 
-### Colour Legend
+### Layer Descriptions
 
-| Colour | Group | Purpose |
-|---|---|---|
-| 🟦 **Deep Navy** `#1F4E79` | Data Source | Raw dataset origin and structure |
-| 🔵 **Steel Blue** `#2E75B6` | Data Ingestion | Load function, type conversions, date parsing |
-| 🟧 **Burnt Orange** `#C55A11` | Data Quality | Audit, issue identification, cleaning actions |
-| 🟩 **Forest Green** `#375623` | Feature Engineering | 11 derived variables; LTI starred as key innovation |
-| 🟣 **Purple** `#7030A0` | Statistical Analysis | Pearson r, Spearman r, t-tests, OLS regression |
-| 🔷 **Ocean Blue** `#0070C0` | Exploratory Analysis | 29 charts across 3 tiers (UV/BV/MV) |
-| 🟡 **Amber/Gold** `#9C6500` | Key Insights | 5 primary findings that drive the explanatory narrative |
-| 🔴 **Crimson** `#C00000` | Explanatory Analysis | 16 polished slides for Reveal.js presentation |
-| 🌲 **Dark Green** `#375623` | Outputs | HTML report, slide deck, Word document |
+| Layer | Colour | Node IDs | Responsibility |
+|---|---|---|---|
+| 🟦 **Data Source** | Deep Teal `#0D5C6E` | SRC1, SRC2 | External source — Prosper Marketplace S3 CSV |
+| 🔵 **Ingestion** | Sky Blue `#1976D2` | ING1, ING2, ING3 | Programmatic load, type conversions, date parsing |
+| ⬛ **Raw Storage** | Steel Blue `#455A64` | RAW | Immutable CSV snapshot before any transformation |
+| 🟣 **Assessment** | Violet `#6A1B9A` | VASS, PASS | Visual and programmatic quality / tidiness profiling |
+| 🟠 **Issues** | Amber `#E65100` | QI1–QI3, TI1 | Documented quality and tidiness problems identified |
+| 🟢 **Cleaning** | Green `#2E7D32` | CL1–CL4 | Targeted issue resolution with documented rationale |
+| 🟡 **Feature Engineering** | Gold `#F57F17` | FE1–FE4 | 11 derived variables; ★ LoanToIncomeRatio key innovation |
+| 🟫 **Merge** | Brown `#795548` | MERGE | Analysis-ready dataset: 113,937 rows × 92 columns |
+| 🔷 **Statistical Analysis** | Deep Purple `#4527A0` | ST1–ST3 | Pearson r, Spearman r, t-tests, OLS, 95% CIs |
+| 🔵 **Exploratory Analysis** | Navy Blue `#1A237E` | UV, BV, MV | 29 charts across Univariate → Bivariate → Multivariate tiers |
+| 🌿 **Key Insights** | Olive Gold `#827717` | KI1–KI3 | 3 primary findings driving the explanatory narrative |
+| 🔴 **Explanatory Slides** | Crimson `#880E4F` | SL1, SL2 | 16 polished Reveal.js slides with speaker notes |
+| 🌲 **Outputs** | Forest Green `#1B5E20` | OP1–OP3 | HTML report, slide deck, Word document |
 
-### Pipeline Description
-
-| Stage | Technology | Purpose |
-|---|---|---|
-| **Data Source** | CSV (S3) | 113,937 × 81 raw loan records |
-| **Data Ingestion** | `pandas.read_csv()` | Load; apply ordered Categorical types at read time |
-| **Data Quality** | `quality_report()` | Enumerate nulls, dtypes, known issues before any analysis |
-| **Feature Engineering** | `pandas`, `numpy` | 11 derived columns; all vectorised, scale to any N |
-| **Statistical Analysis** | `scipy.stats` | Pearson r, Spearman r, t-tests, OLS regression, 95% CIs |
-| **Exploratory Analysis** | `matplotlib`, `seaborn` | 29 charts across 3 tiers with Q→V→O framework |
-| **Key Insights** | Markdown narrative | 5 primary findings that drive the explanatory narrative |
-| **Explanatory Analysis** | Reveal.js via nbconvert | 16 polished slides with speaker notes |
-| **Outputs** | `nbconvert` | HTML exploratory report + HTML5 slide deck + Word report |
 
 ---
 
@@ -371,7 +462,7 @@ Eleven derived variables were engineered before any analysis. All are vectorised
 
 ---
 
-## 💡 Key Findings Summary
+## Key Findings Summary
 
 ### Finding 1 — Prosper Rating is the Master Variable
 
@@ -678,7 +769,7 @@ df.groupby('OriginationYear', observed=False)
 
 ---
 
-## Future Research
+## 🔭 Future Research
 
 1. **Survival analysis** — Apply Cox proportional hazards models to account for loan-age censoring and estimate true default hazard rates as a function of borrower characteristics and time-at-risk.
 
